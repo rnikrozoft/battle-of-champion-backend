@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"github.com/heroiclabs/nakama-common/runtime"
 )
 
-// Phase one deliberately admits only P1. Slot-aware simulation and scoring support P2.
-const playerLimit = 1
+const playerLimit = 10
 
 func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, initializer runtime.Initializer) error {
 	if err := loadArena(); err != nil {
@@ -25,20 +23,7 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 		if !ok || uid == "" {
 			return "", runtime.NewError("Authentication required", 16)
 		}
-		// One live owned match per guest; relaunches cannot create unbounded idle matches.
-		matches, err := nk.MatchList(ctx, 1, true, "", nil, nil, "+label.owner:"+uid)
-		if err != nil {
-			return "", err
-		}
-		if len(matches) > 0 {
-			return fmt.Sprintf(`{"match_id":%q}`, matches[0].MatchId), nil
-		}
-		id, err := nk.MatchCreate(ctx, "survival_arena", map[string]interface{}{"owner": uid})
-		if err != nil {
-			return "", err
-		}
-		result, _ := json.Marshal(map[string]string{"match_id": id})
-		return string(result), nil
+		return resolveRoom(ctx, nk, uid, payload)
 	})
 }
 
@@ -47,16 +32,14 @@ type ArenaMatch struct{}
 func (*ArenaMatch) MatchInit(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, params map[string]interface{}) (interface{}, int, string) {
 	owner, _ := params["owner"].(string)
 	s := newState(owner)
-	label, _ := json.Marshal(map[string]string{"owner": owner, "phase": "solo"})
+	s.RoomCode, _ = params["room_code"].(string)
+	label, _ := json.Marshal(map[string]string{"owner": owner, "room_code": s.RoomCode})
 	return s, tickRate, string(label)
 }
 func (*ArenaMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presence runtime.Presence, metadata map[string]string) (interface{}, bool, string) {
 	s := state.(*State)
 	if s.Ended {
 		return s, false, "Match finished"
-	}
-	if playerLimit == 1 && presence.GetUserId() != s.owner {
-		return s, false, "Phase one is Player 1 only"
 	}
 	for _, p := range s.players {
 		if p.ID == presence.GetUserId() {
@@ -68,18 +51,23 @@ func (*ArenaMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger, 
 func (*ArenaMatch) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presences []runtime.Presence) interface{} {
 	s := state.(*State)
 	for _, presence := range presences {
-		if len(s.players) >= playerLimit {
-			continue
-		}
-		slot := 0
+		duplicate := false
 		for _, p := range s.players {
-			if p.Slot == 0 {
-				slot = 1
+			if p.ID == presence.GetUserId() {
+				duplicate = true
+				break
 			}
 		}
-		spawn := world.Players[slot]
-		p := &Actor{ID: presence.GetUserId(), Slot: slot, X: spawn.X, Y: spawn.Y, HP: 100, Face: 1, Anim: "Idle", session: presence.GetSessionId()}
-		if slot == 1 {
+		if s.Ended || len(s.players) >= playerLimit || duplicate {
+			if err := dispatcher.MatchKick([]runtime.Presence{presence}); err != nil {
+				logger.Warn("reject excess room presence: %v", err)
+			}
+			continue
+		}
+		slot := freeSlot(s.players)
+		spawn := playerSpawn(slot)
+		p := &Actor{ID: presence.GetUserId(), Slot: slot, X: spawn.X, Y: spawn.Y, HP: 100, Stamina: 100, Face: 1, Anim: "Idle", session: presence.GetSessionId()}
+		if slot%2 == 1 {
 			p.Face = -1
 		}
 		s.players = append(s.players, p)
@@ -97,11 +85,19 @@ func (*ArenaMatch) MatchLeave(ctx context.Context, logger runtime.Logger, db *sq
 	for _, presence := range presences {
 		for i := len(s.players) - 1; i >= 0; i-- {
 			if s.players[i].session == presence.GetSessionId() {
+				for _, n := range s.npcs {
+					if n.target == s.players[i] {
+						n.target = nil
+					}
+				}
 				s.players = append(s.players[:i], s.players[i+1:]...)
 			}
 		}
 	}
 	if len(s.players) == 0 {
+		if !s.Ended {
+			releaseRoom(s.RoomCode)
+		}
 		return nil
 	}
 	return s
@@ -110,6 +106,7 @@ func (*ArenaMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql
 	s := state.(*State)
 	if !s.started {
 		if tick > tickRate*30 {
+			releaseRoom(s.RoomCode)
 			return nil
 		}
 		return s
@@ -154,6 +151,9 @@ func (*ArenaMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql
 }
 func (*ArenaMatch) MatchTerminate(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, graceSeconds int) interface{} {
 	s := state.(*State)
+	if !s.Ended {
+		releaseRoom(s.RoomCode)
+	}
 	s.Ended = true
 	s.Result = "Server shutting down"
 	s.broadcast(dispatcher, tick, logger)

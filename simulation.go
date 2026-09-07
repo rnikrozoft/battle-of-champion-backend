@@ -10,7 +10,10 @@ import (
 
 const tickRate = 30
 const dt = 1.0 / tickRate
-const maxNPC = 24
+const maxNPC = 48
+const dashCost = 30.0
+const dashCooldownTicks = 12
+const damageProtectionTicks = 9
 
 //go:embed arena.json
 var arenaData []byte
@@ -28,11 +31,17 @@ type Solid struct {
 	OneWay bool    `json:"one_way"`
 }
 type World struct {
-	PlayerBody Point   `json:"player_body"`
-	NPCBody    Point   `json:"npc_body"`
-	Solids     []Solid `json:"solids"`
-	Players    []Point `json:"players"`
-	NPCs       []Point `json:"npcs"`
+	Width      float64    `json:"width"`
+	Height     float64    `json:"height"`
+	PlayerBody Point      `json:"player_body"`
+	NPCBody    Point      `json:"npc_body"`
+	Solids     []Solid    `json:"solids"`
+	Players    []Point    `json:"players"`
+	NPCs       []NPCSpawn `json:"npcs"`
+}
+type NPCSpawn struct {
+	Point
+	Kind string `json:"kind"`
 }
 
 func loadArena() error {
@@ -44,6 +53,9 @@ func loadArena() error {
 	}
 	if world.NPCBody.X <= 0 {
 		world.NPCBody = Point{18, 17}
+	}
+	if world.Width <= 0 || world.Height <= 0 {
+		return fmt.Errorf("arena requires positive width and height")
 	}
 	if len(world.Players) != 2 || len(world.NPCs) == 0 || len(world.Solids) == 0 {
 		return fmt.Errorf("arena needs collision, two player markers and NPC markers")
@@ -59,58 +71,76 @@ type Input struct {
 	Attack bool  `json:"attack"`
 }
 type Actor struct {
-	ID             string  `json:"id"`
-	Slot           int     `json:"slot"`
-	X              float64 `json:"x"`
-	Y              float64 `json:"y"`
-	VX             float64 `json:"vx"`
-	VY             float64 `json:"vy"`
-	HP             int     `json:"hp"`
-	Deaths         int     `json:"deaths"`
-	Kills          int     `json:"kills"`
-	Face           int     `json:"face"`
-	Anim           string  `json:"anim"`
-	Hit            int     `json:"hit"`
-	Attack         int     `json:"attack"`
-	input          Input
-	session        string
-	lastInput      int64
-	grounded       bool
-	jumps          int
-	dashTicks      int
-	dashCooldown   int
-	attackTicks    int
-	attackCooldown int
-	invulnerable   int
-	deadTicks      int
-	landTicks      int
-	aiTick         int
-	aiCadence      int
-	goalX          float64
-	goalY          float64
-	target         *Actor
+	ID               string  `json:"id"`
+	Kind             string  `json:"kind"`
+	Slot             int     `json:"slot"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	VX               float64 `json:"vx"`
+	VY               float64 `json:"vy"`
+	HP               int     `json:"hp"`
+	Stamina          float64 `json:"stamina"`
+	DamageTotal      int     `json:"damage_total"`
+	Invincible       bool    `json:"invincible"`
+	damageFreeTicks  int
+	regenTicks       int
+	Deaths           int    `json:"deaths"`
+	Kills            int    `json:"kills"`
+	Face             int    `json:"face"`
+	Anim             string `json:"anim"`
+	Hit              int    `json:"hit"`
+	Attack           int    `json:"attack"`
+	input            Input
+	session          string
+	lastInput        int64
+	grounded         bool
+	jumps            int
+	dashTicks        int
+	dashCooldown     int
+	attackTicks      int
+	attackCooldown   int
+	invulnerable     int
+	deadTicks        int
+	landTicks        int
+	aiTick           int
+	aiCadence        int
+	goalX            float64
+	goalY            float64
+	target           *Actor
+	jumpAnticipation int
+	specialTicks     int
+	specialCooldown  int
+	special          string
+	fleeing          bool
 }
 type State struct {
-	Tick      int64    `json:"tick"`
-	Remaining float64  `json:"remaining"`
-	Ended     bool     `json:"ended"`
-	Result    string   `json:"result"`
-	Actors    []*Actor `json:"actors"`
-	owner     string
-	players   []*Actor
-	npcs      []*Actor
-	pool      []*Actor
-	started   bool
-	startTick int64
-	endTick   int64
-	nextSpawn int64
-	serial    int
-	navPrev   []int
-	navQueue  []int
+	Tick       int64    `json:"tick"`
+	Remaining  float64  `json:"remaining"`
+	Ended      bool     `json:"ended"`
+	Result     string   `json:"result"`
+	RoomCode   string   `json:"room_code"`
+	Width      float64  `json:"width"`
+	Height     float64  `json:"height"`
+	Bombs      []*Bomb  `json:"bombs"`
+	Actors     []*Actor `json:"actors"`
+	owner      string
+	players    []*Actor
+	npcs       []*Actor
+	pool       []*Actor
+	started    bool
+	startTick  int64
+	endTick    int64
+	nextSpawn  int64
+	serial     int
+	navPrev    []int
+	navQueue   []int
+	bombSerial int
 }
 
 func newState(owner string) *State {
-	s := &State{owner: owner, Remaining: 180, players: make([]*Actor, 0, 2), npcs: make([]*Actor, 0, maxNPC), pool: make([]*Actor, 0, maxNPC), Actors: make([]*Actor, 0, maxNPC+2)}
+	s := &State{owner: owner, Remaining: 180, players: make([]*Actor, 0, playerLimit), npcs: make([]*Actor, 0, maxNPC), pool: make([]*Actor, 0, maxNPC), Actors: make([]*Actor, 0, maxNPC+playerLimit)}
+	s.Width, s.Height = world.Width, world.Height
+	s.Bombs = make([]*Bomb, 0, 24)
 	s.navPrev = make([]int, len(world.Solids))
 	s.navQueue = make([]int, len(world.Solids))
 	for i := 0; i < maxNPC; i++ {
@@ -123,7 +153,7 @@ func newState(owner string) *State {
 		n := s.pool[len(s.pool)-1]
 		s.pool = s.pool[:len(s.pool)-1]
 		s.serial++
-		*n = Actor{ID: fmt.Sprintf("npc-%d", s.serial), Slot: -1, X: point.X, Y: point.Y, HP: 100, Face: 1, Anim: "Idle", aiCadence: 8 + s.serial%4}
+		*n = spawnNPC(point, s.serial)
 		s.npcs = append(s.npcs, n)
 	}
 	return s
@@ -134,7 +164,7 @@ func (s *State) step(tick int64) {
 		n := s.pool[len(s.pool)-1]
 		s.pool = s.pool[:len(s.pool)-1]
 		s.serial++
-		*n = Actor{ID: fmt.Sprintf("npc-%d", s.serial), Slot: -1, X: point.X, Y: point.Y, HP: 100, Face: 1, Anim: "Idle", aiCadence: 8 + s.serial%4}
+		*n = spawnNPC(point, s.serial)
 		s.npcs = append(s.npcs, n)
 		s.nextSpawn = tick + tickRate*4
 	}
@@ -160,16 +190,28 @@ func (s *State) step(tick int64) {
 		s.think(n)
 		s.advance(n)
 	}
+	s.stepBombs()
 }
 func (s *State) advance(a *Actor) {
 	if a.HP <= 0 {
 		a.Anim = "Dead"
+		if isPirate(a) {
+			if a.deadTicks > 18 {
+				a.Anim = "DeadHit"
+			} else {
+				a.Anim = "DeadGround"
+			}
+		}
 		a.deadTicks--
 		if a.deadTicks <= 0 && a.Slot >= 0 {
-			p := world.Players[a.Slot]
+			p := playerSpawn(a.Slot)
 			a.X = p.X
 			a.Y = p.Y
 			a.HP = 100
+			a.Stamina = 100
+			a.damageFreeTicks = 0
+			a.regenTicks = 0
+			a.dashCooldown = 0
 			a.VX = 0
 			a.VY = 0
 			a.jumps = 0
@@ -178,6 +220,17 @@ func (s *State) advance(a *Actor) {
 			a.dashTicks = 0
 		}
 		return
+	}
+	if a.Slot >= 0 {
+		a.Stamina = math.Min(100, a.Stamina+20*dt)
+		a.damageFreeTicks++
+		if a.damageFreeTicks > 5*tickRate && a.HP < 100 {
+			a.regenTicks++
+			if a.regenTicks >= tickRate/5 {
+				a.HP++
+				a.regenTicks = 0
+			}
+		}
 	}
 	if a.invulnerable > 0 {
 		a.invulnerable--
@@ -191,17 +244,29 @@ func (s *State) advance(a *Actor) {
 	if a.landTicks > 0 {
 		a.landTicks--
 	}
+	if a.specialCooldown > 0 {
+		a.specialCooldown--
+	}
+	launch := false
+	if a.jumpAnticipation > 0 {
+		a.jumpAnticipation--
+		launch = a.jumpAnticipation == 0
+	}
+	if a.input.Jump && a.grounded && isPirate(a) && !launch && a.jumpAnticipation == 0 {
+		a.jumpAnticipation = 3
+	}
 	if a.input.Move != 0 {
 		a.Face = a.input.Move
 	}
-	if a.input.Jump && a.jumps < 2 {
+	if (a.input.Jump || launch) && a.jumps < 2 && a.jumpAnticipation == 0 {
 		a.VY = -230
 		a.jumps++
 		a.grounded = false
 	}
-	if a.input.Dash && a.Slot >= 0 && a.dashCooldown == 0 {
+	if a.input.Dash && a.Slot >= 0 && a.dashCooldown == 0 && a.Stamina >= dashCost {
 		a.dashTicks = 5
-		a.dashCooldown = 27
+		a.dashCooldown = dashCooldownTicks
+		a.Stamina -= dashCost
 	}
 	if a.input.Attack && a.attackCooldown == 0 {
 		a.attackTicks = 9
@@ -210,7 +275,7 @@ func (s *State) advance(a *Actor) {
 	}
 	speed := 100.0
 	if a.Slot < 0 {
-		speed = 58
+		speed = npcSpeed(a.Kind)
 	}
 	a.VX = float64(a.input.Move) * speed
 	if a.dashTicks > 0 {
@@ -237,8 +302,10 @@ func (s *State) advance(a *Actor) {
 		}
 	}
 	switch {
-	case a.invulnerable > 0 && a.invulnerable < 9:
+	case a.invulnerable > 0 && a.invulnerable <= damageProtectionTicks:
 		a.Anim = "Hit"
+	case a.jumpAnticipation > 0:
+		a.Anim = "JumpAnticipation"
 	case a.attackTicks > 0:
 		a.Anim = "Attack"
 	case !a.grounded && a.VY < 0:
@@ -252,12 +319,25 @@ func (s *State) advance(a *Actor) {
 	default:
 		a.Anim = "Idle"
 	}
-	if a.Y > 240 {
+	if a.fleeing && a.grounded && a.attackTicks == 0 && a.invulnerable == 0 {
+		a.Anim = "ScareRun"
+	}
+	s.advanceSpecial(a)
+	if a.Y > world.Height+64 {
 		s.damage(a, nil, 100)
 	}
 }
 func size(a *Actor) (float64, float64) {
+	if a.Kind == "bomb" {
+		return 5, 10
+	}
 	if a.Slot < 0 {
+		if a.Kind == "big-guy" || a.Kind == "whale" {
+			return 14, 30
+		}
+		if isPirate(a) {
+			return 10, 28
+		}
 		return world.NPCBody.X / 2, world.NPCBody.Y
 	}
 	return world.PlayerBody.X / 2, world.PlayerBody.Y
@@ -302,6 +382,7 @@ func moveActor(a *Actor) {
 			a.VY = 0
 		}
 	}
+	a.X = math.Max(16+half, math.Min(world.Width-16-half, a.X))
 }
 func (s *State) strike(a *Actor) {
 	if a.Slot >= 0 {
@@ -339,14 +420,24 @@ func (s *State) damage(victim, attacker *Actor, amount int) {
 	if victim.HP <= 0 || victim.invulnerable > 0 {
 		return
 	}
+	victim.DamageTotal += min(victim.HP, amount)
 	victim.HP = max(0, victim.HP-amount)
+	victim.damageFreeTicks = 0
+	victim.regenTicks = 0
 	victim.Hit++
-	victim.invulnerable = 8
+	victim.invulnerable = damageProtectionTicks
+	victim.specialTicks = 0
+	victim.special = ""
 	// Damage never changes velocity: deliberately no knockback.
 	if victim.HP == 0 {
 		victim.deadTicks = 30
 		victim.attackTicks = 0
 		victim.Anim = "Dead"
+		if isPirate(victim) {
+			victim.Anim = "DeadHit"
+		}
+		victim.specialTicks = 0
+		victim.special = ""
 		if victim.Slot >= 0 {
 			victim.Deaths++
 		}
@@ -358,6 +449,9 @@ func (s *State) damage(victim, attacker *Actor, amount int) {
 func (s *State) think(n *Actor) {
 	n.input = Input{}
 	if n.HP <= 0 {
+		return
+	}
+	if s.thinkSpecial(n) {
 		return
 	}
 	n.aiTick--
@@ -453,6 +547,7 @@ func (s *State) route(a, b *Actor) (float64, float64) {
 }
 func (s *State) finish(tick int64) {
 	s.Ended = true
+	releaseRoom(s.RoomCode)
 	s.endTick = tick
 	if len(s.players) == 1 {
 		p := s.players[0]
@@ -463,23 +558,20 @@ func (s *State) finish(tick int64) {
 		s.Result = "Match ended"
 		return
 	}
-	a, b := s.players[0], s.players[1]
-	winner := ""
-	if a.Deaths < b.Deaths {
-		winner = a.ID
-	} else if b.Deaths < a.Deaths {
-		winner = b.ID
-	} else if a.Deaths == 0 {
-		if a.Kills > b.Kills {
-			winner = a.ID
-		} else if b.Kills > a.Kills {
-			winner = b.ID
+	best := s.players[0]
+	tied := false
+	for _, p := range s.players[1:] {
+		if p.Deaths < best.Deaths || (p.Deaths == 0 && best.Deaths == 0 && p.Kills > best.Kills) {
+			best = p
+			tied = false
+		} else if p.Deaths == best.Deaths && (p.Deaths != 0 || p.Kills == best.Kills) {
+			tied = true
 		}
 	}
-	if winner == "" {
+	if tied {
 		s.Result = "Draw"
 	} else {
-		s.Result = winner + " wins"
+		s.Result = best.ID + " wins"
 	}
 }
 func (s *State) broadcast(dispatcher runtime.MatchDispatcher, tick int64, logger runtime.Logger) {
@@ -487,6 +579,9 @@ func (s *State) broadcast(dispatcher runtime.MatchDispatcher, tick int64, logger
 	s.Actors = s.Actors[:0]
 	s.Actors = append(s.Actors, s.players...)
 	s.Actors = append(s.Actors, s.npcs...)
+	for _, a := range s.Actors {
+		a.Invincible = a.invulnerable > 0 && a.HP > 0
+	}
 	data, err := json.Marshal(s)
 	if err != nil {
 		logger.Error("snapshot: %v", err)
