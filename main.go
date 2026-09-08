@@ -18,13 +18,16 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 	}); err != nil {
 		return err
 	}
-	return initializer.RegisterRpc("create_arena", func(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, payload string) (string, error) {
+	if err := initializer.RegisterRpc("create_arena", func(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, payload string) (string, error) {
 		uid, ok := ctx.Value(runtime.RUNTIME_CTX_USER_ID).(string)
 		if !ok || uid == "" {
 			return "", runtime.NewError("Authentication required", 16)
 		}
 		return resolveRoom(ctx, nk, uid, payload)
-	})
+	}); err != nil {
+		return err
+	}
+	return initializer.RegisterRpc("list_tank_players", listTankPlayers)
 }
 
 type ArenaMatch struct{}
