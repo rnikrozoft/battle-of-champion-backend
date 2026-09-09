@@ -1,0 +1,155 @@
+[
+  {
+    "kind": "bald-pirate",
+    "name": "Bald Pirate",
+    "price": 25,
+    "power": 12,
+    "health": 80,
+    "speed": 40,
+    "rarity": "Common"
+  },
+  {
+    "kind": "big-guy",
+    "name": "Big Guy",
+    "price": 30,
+    "power": 15,
+    "health": 90,
+    "speed": 45,
+    "rarity": "Common"
+  },
+  {
+    "kind": "bomb-guy",
+    "name": "Bomb Guy",
+    "price": 35,
+    "power": 18,
+    "health": 100,
+    "speed": 50,
+    "rarity": "Common"
+  },
+  {
+    "kind": "captain",
+    "name": "Captain",
+    "price": 40,
+    "power": 21,
+    "health": 110,
+    "speed": 55,
+    "rarity": "Common"
+  },
+  {
+    "kind": "captain-clown-nose",
+    "name": "Captain Clown Nose",
+    "price": 45,
+    "power": 24,
+    "health": 120,
+    "speed": 60,
+    "rarity": "Rare"
+  },
+  {
+    "kind": "crabby",
+    "name": "Crabby",
+    "price": 25,
+    "power": 27,
+    "health": 80,
+    "speed": 65,
+    "rarity": "Common"
+  },
+  {
+    "kind": "cucumber",
+    "name": "Cucumber",
+    "price": 30,
+    "power": 12,
+    "health": 90,
+    "speed": 70,
+    "rarity": "Common"
+  },
+  {
+    "kind": "fierce-tooth",
+    "name": "Fierce Tooth",
+    "price": 35,
+    "power": 15,
+    "health": 100,
+    "speed": 40,
+    "rarity": "Common"
+  },
+  {
+    "kind": "king",
+    "name": "King",
+    "price": 40,
+    "power": 18,
+    "health": 110,
+    "speed": 45,
+    "rarity": "Common"
+  },
+  {
+    "kind": "king-pig",
+    "name": "King Pig",
+    "price": 45,
+    "power": 21,
+    "health": 120,
+    "speed": 50,
+    "rarity": "Rare"
+  },
+  {
+    "kind": "pig",
+    "name": "Pig",
+    "price": 25,
+    "power": 24,
+    "health": 80,
+    "speed": 55,
+    "rarity": "Common"
+  },
+  {
+    "kind": "pig-bomber",
+    "name": "Pig Bomber",
+    "price": 30,
+    "power": 27,
+    "health": 90,
+    "speed": 60,
+    "rarity": "Common"
+  },
+  {
+    "kind": "pig-box-disguise",
+    "name": "Pig Box Disguise",
+    "price": 35,
+    "power": 12,
+    "health": 100,
+    "speed": 65,
+    "rarity": "Common"
+  },
+  {
+    "kind": "pig-box-thrower",
+    "name": "Pig Box Thrower",
+    "price": 40,
+    "power": 15,
+    "health": 110,
+    "speed": 70,
+    "rarity": "Common"
+  },
+  {
+    "kind": "pig-match",
+    "name": "Pig Match",
+    "price": 45,
+    "power": 18,
+    "health": 120,
+    "speed": 40,
+    "rarity": "Rare"
+  },
+  {
+    "kind": "pink-star",
+    "name": "Pink Star",
+    "price": 25,
+    "power": 21,
+    "health": 80,
+    "speed": 45,
+    "rarity": "Common"
+  },
+  {
+    "kind": "whale",
+    "name": "Whale",
+    "price": 30,
+    "power": 24,
+    "health": 90,
+    "speed": 50,
+    "rarity": "Common"
+  }
+]

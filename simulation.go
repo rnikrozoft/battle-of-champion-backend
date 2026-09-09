@@ -90,6 +90,9 @@ type Actor struct {
 	Anim             string `json:"anim"`
 	Hit              int    `json:"hit"`
 	Attack           int    `json:"attack"`
+	Grounded         bool   `json:"grounded"`
+	JumpEvent        int    `json:"jump_event"`
+	LandEvent        int    `json:"land_event"`
 	input            Input
 	session          string
 	lastInput        int64
@@ -252,7 +255,7 @@ func (s *State) advance(a *Actor) {
 		a.jumpAnticipation--
 		launch = a.jumpAnticipation == 0
 	}
-	if a.input.Jump && a.grounded && isPirate(a) && !launch && a.jumpAnticipation == 0 {
+	if a.input.Jump && a.grounded && isPirate(a) && !isCrusty(a) && !launch && a.jumpAnticipation == 0 {
 		a.jumpAnticipation = 3
 	}
 	if a.input.Move != 0 {
@@ -260,6 +263,7 @@ func (s *State) advance(a *Actor) {
 	}
 	if (a.input.Jump || launch) && a.jumps < 2 && a.jumpAnticipation == 0 {
 		a.VY = -230
+		a.JumpEvent++
 		a.jumps++
 		a.grounded = false
 	}
@@ -270,6 +274,9 @@ func (s *State) advance(a *Actor) {
 	}
 	if a.input.Attack && a.attackCooldown == 0 {
 		a.attackTicks = 9
+		if isCrusty(a) {
+			a.attackTicks = 15
+		}
 		a.attackCooldown = 16
 		a.Attack++
 	}
@@ -291,6 +298,7 @@ func (s *State) advance(a *Actor) {
 		a.jumps = 0
 		if !wasGrounded {
 			a.landTicks = 3
+			a.LandEvent++
 		}
 	} else if a.jumps == 0 {
 		a.jumps = 1
@@ -308,6 +316,9 @@ func (s *State) advance(a *Actor) {
 		a.Anim = "JumpAnticipation"
 	case a.attackTicks > 0:
 		a.Anim = "Attack"
+		if isCrusty(a) && a.attackTicks >= 9 {
+			a.Anim = "Anticipation"
+		}
 	case !a.grounded && a.VY < 0:
 		a.Anim = "Jump"
 	case !a.grounded:
@@ -383,6 +394,7 @@ func moveActor(a *Actor) {
 		}
 	}
 	a.X = math.Max(16+half, math.Min(world.Width-16-half, a.X))
+	a.Grounded = a.grounded
 }
 func (s *State) strike(a *Actor) {
 	if a.Slot >= 0 {

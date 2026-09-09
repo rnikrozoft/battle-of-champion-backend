@@ -19,8 +19,8 @@ func TestExpandedStageGeometryAndRoutes(t *testing.T) {
 			t.Fatal("old kill plane damages expanded stage")
 		}
 	}
-	if len(kinds) != 5 {
-		t.Fatalf("expected five pirate types, got %v", kinds)
+	if len(kinds) != 8 {
+		t.Fatalf("expected eight enemy types, got %v", kinds)
 	}
 	// Match the routing graph's actual jump constraints from the floor upward.
 	reachable := make([]bool, len(world.Solids))

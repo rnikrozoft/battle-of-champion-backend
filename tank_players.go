@@ -9,7 +9,7 @@ import (
 )
 
 // Expose only public account identifiers, never console credentials or account PII.
-// Tank contents remain local prototypes; this endpoint lists real Nakama accounts.
+// The tank RPC serves each listed account's authoritative inventory.
 func listTankPlayers(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, payload string) (string, error) {
 	uid, _ := ctx.Value(runtime.RUNTIME_CTX_USER_ID).(string)
 	if uid == "" {

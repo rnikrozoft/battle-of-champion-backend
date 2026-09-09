@@ -6,6 +6,9 @@ import (
 )
 
 func isPirate(a *Actor) bool { return a.Kind != "" && a.Kind != "pig" && a.Kind != "bomb" }
+func isCrusty(a *Actor) bool {
+	return a.Kind == "crabby" || a.Kind == "fierce-tooth" || a.Kind == "pink-star"
+}
 func spawnNPC(p NPCSpawn, serial int) Actor {
 	kind := p.Kind
 	if kind == "" {
@@ -15,6 +18,12 @@ func spawnNPC(p NPCSpawn, serial int) Actor {
 }
 func npcSpeed(kind string) float64 {
 	switch kind {
+	case "crabby":
+		return 44
+	case "fierce-tooth":
+		return 92
+	case "pink-star":
+		return 68
 	case "bald-pirate":
 		return 72
 	case "captain":

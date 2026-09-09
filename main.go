@@ -10,6 +10,12 @@ import (
 const playerLimit = 10
 
 func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, initializer runtime.Initializer) error {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS pirate_tanks (user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, state JSONB NOT NULL)`); err != nil {
+		return err
+	}
+	if err := initializer.RegisterRpc("tank", tankRPC); err != nil {
+		return err
+	}
 	if err := loadArena(); err != nil {
 		return err
 	}

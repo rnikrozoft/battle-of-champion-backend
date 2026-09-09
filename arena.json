@@ -1463,7 +1463,7 @@
     {
       "x": 1668,
       "y": 192,
-      "kind": "bald-pirate"
+      "kind": "crabby"
     },
     {
       "x": 2052,
@@ -1483,12 +1483,12 @@
     {
       "x": 2196,
       "y": 384,
-      "kind": "bald-pirate"
+      "kind": "crabby"
     },
     {
       "x": 2628,
       "y": 192,
-      "kind": "cucumber"
+      "kind": "fierce-tooth"
     },
     {
       "x": 3012,
@@ -1503,17 +1503,17 @@
     {
       "x": 3300,
       "y": 576,
-      "kind": "bald-pirate"
+      "kind": "crabby"
     },
     {
       "x": 3156,
       "y": 384,
-      "kind": "cucumber"
+      "kind": "fierce-tooth"
     },
     {
       "x": 3588,
       "y": 192,
-      "kind": "big-guy"
+      "kind": "pink-star"
     },
     {
       "x": 3972,
@@ -1523,22 +1523,22 @@
     {
       "x": 4404,
       "y": 768,
-      "kind": "bald-pirate"
+      "kind": "crabby"
     },
     {
       "x": 4260,
       "y": 576,
-      "kind": "cucumber"
+      "kind": "fierce-tooth"
     },
     {
       "x": 4116,
       "y": 384,
-      "kind": "big-guy"
+      "kind": "pink-star"
     },
     {
       "x": 4548,
       "y": 192,
-      "kind": "captain"
+      "kind": "bald-pirate"
     }
   ]
 }

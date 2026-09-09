@@ -3,7 +3,7 @@ ENV GO111MODULE=on CGO_ENABLED=1
 WORKDIR /backend
 COPY go.mod go.sum ./
 RUN go mod download
-COPY *.go arena.json ./
+COPY *.go arena.json shop_catalog.json ./
 RUN go build -trimpath -buildmode=plugin -o /backend/arena.so .
 
 FROM heroiclabs/nakama:3.27.0
