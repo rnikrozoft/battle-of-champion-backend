@@ -12,12 +12,14 @@ import (
 )
 
 type TankHero struct {
-	ID       int64   `json:"id"`
-	Kind     string  `json:"kind"`
-	Level    int     `json:"level"`
-	Hunger   float64 `json:"hunger"`
-	Tank     bool    `json:"tank"`
-	RewardAt int64   `json:"reward_at"`
+	ID         int64   `json:"id"`
+	Kind       string  `json:"kind"`
+	Level      int     `json:"level"`
+	Hunger     float64 `json:"hunger"`
+	Tank       bool    `json:"tank"`
+	RewardAt   int64   `json:"reward_at"`
+	ArenaMatch string  `json:"arena_match,omitempty"`
+	ArenaUntil int64   `json:"arena_until,omitempty"`
 }
 type TankState struct {
 	Owner   string     `json:"owner"`
@@ -110,7 +112,7 @@ func tankRPC(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.
 			}
 		}
 	}
-	raw, err := json.Marshal(map[string]interface{}{"tank": owner, "self": self, "shop": shopCatalog})
+	raw, err := json.Marshal(map[string]interface{}{"tank": owner, "self": self, "shop": shopCatalog, "server_time": time.Now().Unix()})
 	return string(raw), err
 }
 
@@ -143,6 +145,9 @@ func applyTankAction(owner, self *TankState, req TankRequest, now int64) error {
 		return fmt.Errorf("Hero is no longer available")
 	}
 	h := &owner.Heroes[idx]
+	if h.arenaLocked(now) && req.Action != "reward" {
+		return fmt.Errorf("Hero is protected during an Arena match")
+	}
 	switch req.Action {
 	case "steal":
 		if owner == self || !h.Tank {
@@ -169,7 +174,7 @@ func applyTankAction(owner, self *TankState, req TankRequest, now int64) error {
 		}
 		partner := false
 		for _, p := range self.Heroes {
-			if p.ID == req.PartnerID && p.ID != h.ID {
+			if p.ID == req.PartnerID && p.ID != h.ID && !p.arenaLocked(now) {
 				partner = true
 			}
 		}

@@ -4,8 +4,9 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/heroiclabs/nakama-common/runtime"
 	"math"
+
+	"github.com/heroiclabs/nakama-common/runtime"
 )
 
 const tickRate = 30
@@ -117,6 +118,8 @@ type Actor struct {
 	fleeing          bool
 }
 type State struct {
+	matchID    string
+	roster     map[string]arenaReservation
 	Tick       int64    `json:"tick"`
 	Remaining  float64  `json:"remaining"`
 	Ended      bool     `json:"ended"`
@@ -141,7 +144,7 @@ type State struct {
 }
 
 func newState(owner string) *State {
-	s := &State{owner: owner, Remaining: 180, players: make([]*Actor, 0, playerLimit), npcs: make([]*Actor, 0, maxNPC), pool: make([]*Actor, 0, maxNPC), Actors: make([]*Actor, 0, maxNPC+playerLimit)}
+	s := &State{roster: make(map[string]arenaReservation), owner: owner, Remaining: 180, players: make([]*Actor, 0, playerLimit), npcs: make([]*Actor, 0, maxNPC), pool: make([]*Actor, 0, maxNPC), Actors: make([]*Actor, 0, maxNPC+playerLimit)}
 	s.Width, s.Height = world.Width, world.Height
 	s.Bombs = make([]*Bomb, 0, 24)
 	s.navPrev = make([]int, len(world.Solids))
@@ -406,7 +409,7 @@ func (s *State) strike(a *Actor) {
 	}
 	for _, p := range s.players {
 		if p != a && canHit(a, p) {
-			s.damage(p, a, 20)
+			s.damage(p, a, 1)
 		}
 	}
 }
